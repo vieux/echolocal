@@ -64,7 +64,57 @@ It then turns up in Home Assistant on its own, and the key `echoctl` printed is 
   <img src="docs/images/echolocal_discovery_add.png" alt="The confirmation dialog for adding the discovered device" height="230">
 </p>
 
+## Automation phrases
+
+There are three independent **Automation phrase** slots on the main ESPHome device's
+configuration page. Each has a model selector (`None` disables it) and its own sensitivity.
+All automation phrases share Assistant 2's wake tone and ring effect, configurable in the EchoLocal
+dashboard even when Assistant 2's wake word is None. Ring color uses the shared ring setting.
+Previously saved per-automation tones and effects are ignored. These slots use installed models
+without consuming the two assistant pipeline slots. After
+installing new model files, restart echod to refresh the selectors. Select each model in only one
+automation slot; if it is also selected in an assistant slot, the automation takes precedence.
+The custom EchoLocal assistant picker still shows only the two assistant slots.
+For automation-only use, set both assistant wake words to None. This stays disabled after restart
+and prevents the Wake/action buttons from starting conversations. Automation phrase slots still run.
+
+Every automation phrase updates Last wake word, plays Assistant 2's configured feedback, records Activity,
+and emits `esphome.echolocal_wake_word`. Match `model` to the selected model ID in HA automations.
+Event `slot` values are `"3"`, `"4"`, and `"5"` for automation slots 1–3. Unused slots do not load
+models. Enable models one at a time and check detection performance; each distinct model adds CPU work.
+
+This build bundles the following models. Model IDs are case-sensitive and are also the values
+used by the automation selectors and the event's `model` field.
+
+| Model ID | Phrase |
+| --- | --- |
+| `hey_alfred` | Hey Alfred |
+| `alfred_dark` | Alfred Dark |
+| `alfred_lights` | Alfred Lights |
+| `alfred_good_night` | Alfred Good Night |
+| `alfred_lights_on` | Alfred Lights On |
+| `alfred_lights_off` | Alfred Lights Off |
+| `alfred_movie` | Alfred Movie |
+| `alfred_movie_time` | Alfred Movie Time |
+| `alfred_reading_time` | Alfred Reading Time |
+
+The bundled `alfred_good_night` model is an automation phrase. Select **Alfred Good Night** in a
+wake-word slot to listen for it. Detection updates **Last wake word** to `Alfred Good Night`
+without opening a conversation or interrupting an existing turn. It plays Assistant 2's configured
+wake tone and ring effect, with the ring returning to its previous state after 1.5 seconds.
+Other assistant wake words and manual Wake buttons still start conversations when an assistant is enabled.
+Each detection appears in Activity as a completed 0.0s entry with no recording or voice phases.
+
+Each detection also emits `esphome.echolocal_wake_word` with `model: alfred_good_night`,
+`wake_word: Alfred Good Night`, and `slot` (a one-based string). Use this event for automations
+that must run on consecutive detections of the same phrase; the text sensor value may be unchanged.
+
 ## Building it yourself
+
+`make dist` builds the device binaries and an `echoctl` containing the bundled models.
+Use `bin/echoctl install --manifest bin/manifest.json` to install both on a connected device.
+The installer adds missing models; it does not overwrite existing ones or remove old models.
+`make install-echod` updates only the daemon.
 
 ```sh
 make build-echod     # cross-compile the daemon for the Dot

@@ -32,6 +32,14 @@ func init() {
 // configure. Its own UI stops at two.
 const Slots = 2
 
+// AutomationSlots are independent of Home Assistant's two conversation pipelines.
+const AutomationSlots = 3
+
+// AutomationFeedbackSlot is Assistant 2 (zero-based), even when its wake word is None.
+const AutomationFeedbackSlot = 1
+
+func IsAutomationSlot(slot int) bool { return slot >= Slots && slot < Slots+AutomationSlots }
+
 // Requested is a slot woken by hand rather than by hearing anything. What that means is the
 // conversation's to decide, so this only says which slot.
 var Requested hook.Hook[int]

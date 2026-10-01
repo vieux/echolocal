@@ -11,9 +11,8 @@ import (
 	"github.com/ygelfand/echolocal/internal/lib/wake"
 )
 
-// The three the reference satellite ships. A device with none of them cannot offer a wake word until
-// Home Assistant hosts one, which is the state this exists to avoid.
-var want = []string{"hey_jarvis", "hey_mycroft", "okay_nabu"}
+// Our assistant and automation phrases, available without Home Assistant hosting them.
+var want = []string{"alfred_dark", "alfred_good_night", "alfred_lights", "alfred_lights_off", "alfred_lights_on", "alfred_movie", "alfred_movie_time", "alfred_reading_time", "hey_alfred"}
 
 func TestModelsAreTheOnesWeMeanToShip(t *testing.T) {
 	models, err := assets.Models()

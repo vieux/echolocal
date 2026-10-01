@@ -115,8 +115,14 @@ func (v *Voice) Run(ctx context.Context) error {
 // shows on the ring while it comes up.
 func (v *Voice) Ready() bool { return v.vs.Subscribed() }
 
-// Start asks for a turn as if that slot's wake word had fired, which is how detection and the
-// buttons both reach a pipeline. What that means from the phase the conversation is already in is
+// Detected reports a spoken wake word. Automation-only phrases do not open a voice turn.
+func (v *Voice) Detected(slot int) { v.turn.post(event{kind: evDetected, slot: slot}) }
+
+func (v *Voice) AutomationDetected(slot int, id, phrase string) {
+	v.turn.post(event{kind: evAutomation, slot: slot, code: id, text: phrase})
+}
+
+// Start asks for a turn from a button. What that means from the phase the conversation is already in is
 // the conversation's decision, not the caller's.
 func (v *Voice) Start(slot int) { v.turn.Start(slot) }
 

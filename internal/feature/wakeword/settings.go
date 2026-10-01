@@ -5,6 +5,8 @@ import (
 
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/feature/light"
+	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
 )
 
@@ -18,6 +20,16 @@ func Threshold(slot int) float64 { return saved(slot).Threshold }
 
 // Chime sounds a detection in whatever the slot is set to.
 func Chime(slot int) { speaker.Sound().Chime(speaker.WakeTone(saved(slot).Tone)) }
+
+// Acknowledge gives an automation phrase the same tone and ring effect as a normal wake.
+// Without a conversation to own the ring, the effect expires after a brief acknowledgement.
+func Acknowledge(slot int) {
+	Chime(slot)
+	if effect := Effect(slot); effect != "" {
+		led.Get().Claim(led.PriorityTurn).ShowFor(
+			effect, light.Get().Base(), 1500*time.Millisecond)
+	}
+}
 
 // ThinkingEffect and ReplyingEffect are what those phases show, empty to leave them to Effect.
 func ThinkingEffect(slot int) string { return saved(slot).ThinkingEffect }

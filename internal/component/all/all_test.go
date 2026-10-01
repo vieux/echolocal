@@ -18,6 +18,12 @@ import (
 // deliberately when that happens. What it catches is a component that stopped registering — which
 // costs nothing at build time and shows up as an entity quietly missing from Home Assistant.
 var registered = []string{
+	"automation_phrase_1_model",
+	"automation_phrase_1_threshold",
+	"automation_phrase_2_model",
+	"automation_phrase_2_threshold",
+	"automation_phrase_3_model",
+	"automation_phrase_3_threshold",
 	"ble_advertisements",
 	"bluetooth_proxy",
 	"button_action",

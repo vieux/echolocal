@@ -70,7 +70,9 @@ func (p phase) String() string {
 type eventKind int
 
 const (
-	evStart       eventKind = iota // a wake word fired, or something asked for a turn
+	evStart       eventKind = iota // something asked for a turn
+	evDetected                     // a wake word fired
+	evAutomation                   // an automation phrase fired, without a pipeline
 	evHeard                        // Home Assistant has heard enough
 	evReplyText                    // a reply is coming
 	evReplyURL                     // the reply can be fetched whole
@@ -113,11 +115,12 @@ type conversation struct {
 
 	// sound is who may make one. Everything audible goes through it, so cancelling is one call
 	// wherever the sound came from.
-	sound  *speaker.Driver
-	player *media.Player
-	ring   *light.Light
-	leds   *led.Driver
-	log    *activity.Log
+	sound       *speaker.Driver
+	player      *media.Player
+	ring        *light.Light
+	leds        *led.Driver
+	log         *activity.Log
+	acknowledge func(int)
 
 	events chan event
 
@@ -190,16 +193,17 @@ type reply struct {
 
 func newConversation(vs *esphome.VoiceSatellite) *conversation {
 	c := &conversation{
-		vs:      vs,
-		source:  mic.Get(),
-		speaker: speaker.Get(),
-		sound:   speaker.Sound(),
-		player:  media.Get(),
-		ring:    light.Get(),
-		leds:    led.Get(),
-		log:     activity.Get(),
-		events:  make(chan event, 32),
-		out:     make(chan func() error, outDepth),
+		vs:          vs,
+		source:      mic.Get(),
+		speaker:     speaker.Get(),
+		sound:       speaker.Sound(),
+		player:      media.Get(),
+		ring:        light.Get(),
+		leds:        led.Get(),
+		log:         activity.Get(),
+		acknowledge: wakeword.Acknowledge,
+		events:      make(chan event, 32),
+		out:         make(chan func() error, outDepth),
 	}
 
 	vs.OnPipelineEvent = c.pipeline
@@ -308,6 +312,30 @@ func (c *conversation) Run(ctx context.Context) {
 // here, which is what makes the whole thing idempotent.
 func (c *conversation) handle(e event) {
 	switch e.kind {
+	case evAutomation:
+		if !wakeword.IsAutomationSlot(e.slot) || e.code == "" || e.text == "" {
+			return
+		}
+		c.acknowledge(wakeword.AutomationFeedbackSlot)
+		c.log.DetectedOnly(e.code, e.text, e.slot+1)
+
+	case evDetected:
+		if e.slot < 0 || e.slot >= len(c.vs.ActiveWakeWords) {
+			return
+		}
+		// Automation slots own duplicate selections, so the phrase is reported once without a turn.
+		for slot := wakeword.Slots; slot < wakeword.Slots+wakeword.AutomationSlots; slot++ {
+			if config.Get().Wake.Slot(slot).ID == c.vs.ActiveWakeWords[e.slot] {
+				return
+			}
+		}
+		if c.vs.ActiveWakeWords[e.slot] == "alfred_good_night" {
+			c.acknowledge(wakeword.AutomationFeedbackSlot)
+			c.log.DetectedOnly("alfred_good_night", "Alfred Good Night", e.slot+1)
+			return
+		}
+		c.start(nextTurn{slot: e.slot})
+
 	case evStart:
 		c.start(nextTurn{slot: e.slot})
 
@@ -493,6 +521,10 @@ func (c *conversation) muted() (bool, error) { return mute.Get().Muted() }
 // start opens a turn on the pipeline paired with a slot.
 func (c *conversation) start(n nextTurn) {
 	slot := n.slot
+	if len(c.vs.ActiveWakeWords) == 0 {
+		slog.Info("conversation disabled, no assistant wake words selected")
+		return
+	}
 
 	// A cut microphone hears nothing, so a turn started from a button would stream silence until it
 	// gave up — and worse, would look like the device is listening while it is muted.
@@ -826,7 +858,7 @@ func (c *conversation) tts(data []byte, end bool) {
 	_ = end
 }
 
-// Start asks for a turn on a slot's pipeline. Wake detection and the buttons both use it.
+// Start asks for a turn on a slot's pipeline from a button.
 func (c *conversation) Start(slot int) { c.post(event{kind: evStart, slot: slot}) }
 
 // Cancel gives up on whatever is happening.
@@ -982,7 +1014,10 @@ func (c *conversation) reported(dry time.Time) {
 // actually load. Home Assistant takes it as authoritative, so claiming a model that is not here would
 // leave a slot looking armed and deaf.
 func activeWakeWords(models []wake.Model, slots int) []string {
-	saved := config.Get().Wake
+	return selectedWakeWords(models, slots, config.Get().Wake)
+}
+
+func selectedWakeWords(models []wake.Model, slots int, saved config.Wake) []string {
 	var active []string
 	for i := range slots {
 		if id := saved.Slot(i).ID; id != "" {
@@ -996,7 +1031,7 @@ func activeWakeWords(models []wake.Model, slots int) []string {
 	// broken until the user finds the select. The shipped default when it is installed, and otherwise
 	// whatever this device does have — a device carrying one model somebody copied on should listen for
 	// that one rather than for nothing.
-	if len(active) == 0 {
+	if len(active) == 0 && len(saved.Words) == 0 {
 		if m, ok := wake.Find(models, wake.DefaultModel); ok {
 			active = []string{m.ID}
 		} else if len(models) > 0 {

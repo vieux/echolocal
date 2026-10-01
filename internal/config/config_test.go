@@ -19,6 +19,34 @@ func load(t *testing.T) *Store {
 	return st
 }
 
+func TestExtraWakeSlotsPersistWithoutReplacingAssistants(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	st, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Set().Wake(0).ID("okay_nabu"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Set().Wake(4).ID("good_morning"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Set().Wake(4).Threshold(0.92); err != nil {
+		t.Fatal(err)
+	}
+	st, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := st.Get()
+	if c.Wake.Slot(0).ID != "okay_nabu" || c.Wake.Slot(4).ID != "good_morning" || c.Wake.Slot(4).Threshold != 0.92 {
+		t.Fatal("wake selections did not survive reload")
+	}
+	if c.Wake.Slot(2).ID != "" || c.Wake.Slot(2).Threshold != DefaultThreshold {
+		t.Fatal("unused extra slot lost defaults")
+	}
+}
+
 // A file that was never written reads as untouched, so every default is already in what Get hands
 // back and no caller has to supply one.
 func TestDefaultsWhenUnset(t *testing.T) {

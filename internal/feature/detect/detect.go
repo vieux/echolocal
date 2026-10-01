@@ -29,9 +29,11 @@ func init() {
 // Detect is the engine as the device runs it: the wake words the user chose, loaded into it, and the
 // ring saying so until they can hear.
 type Detect struct {
-	engine *Engine
-	busy   *wakeBusy
-	stop   *esphome.Number
+	engine       *Engine
+	busy         *wakeBusy
+	stop         *esphome.Number
+	automations  []esphome.Entity
+	automationMu sync.Mutex
 }
 
 var (
@@ -61,11 +63,19 @@ func newDetect() *Detect {
 			voice.Get().Interrupt()
 			return
 		}
-		voice.Get().Start(slot)
+		if wakeword.IsAutomationSlot(slot) {
+			id := config.Get().Wake.Slot(slot).ID
+			if m, ok := wake.Find(wake.Lib().Ours(), id); ok {
+				voice.Get().AutomationDetected(slot, m.ID, m.Phrase)
+			}
+			return
+		}
+		voice.Get().Detected(slot)
 	}
 
 	d := &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready)}
 	d.stop = newStopEntity(d)
+	d.newAutomationEntities()
 	e.OnReady = d.busy.scored
 
 	// The engine loads on every start, including a restart. Home Assistant only pushes a selection when
@@ -75,6 +85,11 @@ func newDetect() *Detect {
 		turn := voice.Get()
 		turn.SetActiveWakeWords(d.load(turn.ActiveWakeWords()))
 		d.loadStop()
+		for slot := wakeword.Slots; slot < wakeword.Slots+wakeword.AutomationSlots; slot++ {
+			if err := d.loadAutomation(slot, config.Get().Wake.Slot(slot).ID); err != nil {
+				slog.Error("loading automation phrase failed", "slot", slot+1, "err", err)
+			}
+		}
 		return nil
 	}
 

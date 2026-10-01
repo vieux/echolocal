@@ -6,11 +6,10 @@ import (
 )
 
 // Wake words a device starts with, so one that has never met Home Assistant can still hear something.
-// These are the three the reference satellite ships — okay_nabu, hey_jarvis and hey_mycroft, from
-// esphome/micro-wake-word-models.
+// Includes Hey Alfred for conversations and the custom Alfred automation phrases.
 //
-// Embedded unconditionally rather than staged like echod and the boot image: all three are under
-// 200 KB, so every build carries them and there is no build tag to remember.
+// Embedded unconditionally rather than staged like echod and the boot image: these models are
+// small, so every build carries them and there is no build tag to remember.
 //
 //go:embed models
 var models embed.FS

@@ -95,11 +95,14 @@ func newStopEntity(d *Detect) *esphome.Number {
 	return n
 }
 
-func (d *Detect) Entities() []esphome.Entity { return []esphome.Entity{d.stop} }
+func (d *Detect) Entities() []esphome.Entity {
+	return append([]esphome.Entity{d.stop}, d.automations...)
+}
 
 // Restore only publishes the value. Loading the model is Start's, through the engine's Load, so that a
 // restart and a first boot take the same path.
 func (d *Detect) Restore(c config.Config) {
+	d.restoreAutomations(c)
 	d.stop.Set(float32(c.Wake.Stop.Threshold))
 	slog.Info("restored", "what", d.stop.ObjectID, "using", c.Wake.Stop.Threshold)
 }

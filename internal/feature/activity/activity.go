@@ -6,6 +6,7 @@
 package activity
 
 import (
+	"strconv"
 	"sync"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -53,12 +54,25 @@ func (l *Log) Entities() []esphome.Entity {
 	return []esphome.Entity{l.word, l.heard, l.reply}
 }
 
-// Woke records which wake word started a turn, so the transcript that follows can be attributed.
+// Woke records the last recognised wake phrase, including phrases that do not start a turn.
 func (l *Log) Woke(phrase string) {
 	if phrase == "" {
 		return
 	}
 	l.word.Set(component.Fit(phrase))
+}
+
+// DetectedOnly reports an automation phrase without creating a conversation. The event is emitted
+// on every detection, including consecutive detections with the same sensor value.
+func (l *Log) DetectedOnly(id, phrase string, slot int) {
+	l.Woke(phrase)
+	// The Activity feed consumes turn records. Close a record without entering any voice phase:
+	// recognition completed, but no audio was recorded and no assistant was asked to respond.
+	l.Begin(slot, phrase).Ends(Completed)
+	component.Fire.Emit(component.Event{
+		Name: "esphome.echolocal_wake_word",
+		Data: map[string]string{"model": id, "wake_word": phrase, "slot": strconv.Itoa(slot)},
+	})
 }
 
 func (l *Log) Heard(text string) {
